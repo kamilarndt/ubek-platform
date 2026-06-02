@@ -10,14 +10,12 @@
 | ID | Title | Status | Location |
 |----|-------|--------|----------|
 | 001 | No Default Tools in Server — `tools: []` | ⚠️ Superseded | `server/docs/adrs/ADR-001-*.md` |
-| 002 | In-Memory Sessions Only | ❌ **WITHDRAWN** | `server/docs/adrs/ADR-002-*.md` |
+| 002 | In-Memory Sessions Only | ✅ Adopted | `server/docs/adrs/ADR-002-*.md` |
 | 003 | SDK Adapter with Explicit SSE Schema | ✅ Adopted | `server/docs/adrs/ADR-003-*.md` |
 | 004 | Per-Tenant AgentSession Isolation | ✅ Adopted | `server/docs/adrs/ADR-004-*.md` |
 | 005 | Disabled Auto-Retry in Chat | ✅ Adopted | `server/docs/adrs/ADR-005-*.md` |
 | 006 | Feature Flags for Phased Rollout | 📋 Proposed | `server/docs/adrs/ADR-006-*.md` |
 | 007 | Default Tools for Every Pi Agent | ✅ Adopted |
-| 011 | Data-Driven Facade Architecture (Phase 1) | ✅ Adopted |
-| 012 | Full Session Persistence (replaces ADR-002) | ✅ Adopted |
 
 
 ## Active Decisions (No Formal ADR)

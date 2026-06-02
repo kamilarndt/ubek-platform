@@ -9,10 +9,12 @@
 
 UBEK to platforma która sprzedaje inteligencję AI małym firmom jako usługę. Każdy użytkownik dostaje własnego, personalizowanego agenta AI który rozwija się razem z nim — użytkownik zamawia funkcje przez rozmowę, agent je buduje jako rozszerzenia (Pi Extensions).
 
-**Faza 1 (obecnie):** Twarda walidacja rynkowa -- max 20 uzytkownikow, architektoniczna fasada (Data-Driven Configuration), jeden VPS. Wyznacznik sukcesu: retencja + gotowosc do placenia.
-**Faza 2 (po walidacji):** Skalowalna architektura, Core-and-Extension Marketplace, Docker/K8s, wlasny silnik AI.
+**Faza 1 (obecnie):** MVP walidujący popyt — max 20 użytkowników, prosty stack, jeden VPS.
+**Faza 2 (po walidacji):** Skalowalna architektura, Docker/K8s, własny silnik AI.
 
-**Strategia:** Facade first -> Validate -> Core-and-Extension
+**Strategia:** Start Small → Validate → Scale
+
+---
 
 ## 2. Problem Statement
 
@@ -61,34 +63,20 @@ To nie jest chatbot z fixed feature setem. To żywy system:
 4. **Rozszerzenie zostaje** → twój agent staje się lepszy
 5. **Z czasem agent ewoluuje** w personalne centrum zarządzania twoją firmą
 
-
-### Architekturalna Fasada (Phase 1)
-
-Kazdy tenant na starcie sprawia wrazenie posiadania pelnych funkcjonalnosci premium (Big-Tech). Pod maska realizacja opiera sie na **Data-Driven Configuration**:
-- Wrazenie personalizacji = podminana system_prompt + kontekst tekstowy per sesja (SQL)
-- Sub-agenci = osobne watki z dedykowanym promptem i przypisanym kontekstem plikow
-- Bazy wiedzy = wstrzykniecie sparsowanego tekstu/obrazow (Base64) bezposrednio w okno kontekstowe Router LLM
-- 90% pracy obliczeniowej (OCR, ekstrakcja) zrzucone na zewnetrzne modele przez Router
-- Zadnego over-engineeringu - wszystko jest rekordem w PostgreSQL + promptem dynamicznym
 ---
 
-## 4a. Extension Lifecycle - Data-Driven (Phase 1)
+## 4a. Extension Lifecycle
 
-> **User nie buduje extensionow - my konfigurujemy.**
+> **User nie buduje extensionow \u2014 my je budujemy.**
 
-Mechanizm dystrybucji modulow w Fazie 1 jest statyczny (manualny): Administrator modyfikuje obiekty konfiguracyjne JSON w bazie danych i mapuje parametry. Zadnego automatycznego marketplace w kodzie.
-
-1. User mowi Potrzebuje X -> agent zapamietuje potrzebe
+1. User mowi Potrzebuje X \u2192 agent zapamietuje potrzebe
 2. Potrzeba trafia do Admin Dashboard jako zgloszenie
-3. Admin tworzy nowy rekord konfiguracyjny (JSON w DB) - definiuje system_prompt, dostepne narzedzia, kontekst domyslny
-4. Admin przypisuje tenantowi nowy modul przez zmiane flagi/parametru w bazie
-5. Przy nastepnej sesji agent uzywa nowej konfiguracji
-6. User widzi nowa zakladke w sidebarze (dynamiczny UI z konfiguracji)
-7. Serializacja i replikacja modulu do innego tenanta = skopiowanie rekordu JSON + podminana tenant_id
+3. Admin buduje extension (plik .ts z pi.registerTool())
+4. Admin testuje w izolacji (sandbox)
+5. Admin wdraza na konkretnego uzytkownika
+6. User widzi nowa zakladke w sidebarze
+7. Extension dziala \u2014 agent ma nowa umiejetnosc
 
-### Core-and-Extension Marketplace (Phase 2 - docelowe)
-
-Globalny rdzen wtyczki (Extensions) bedzie odizolowany od specyficznych nadpisan klienta (Extension_Overrides w DB) przez Dependency Injection / Hooks. Model ten pozwoli na bezkosztowe replikowanie modulow miedzy tenantami z automatycznym mergem konfiguracji
 ---
 
 ## 5. Features by Priority
@@ -153,12 +141,11 @@ Globalny rdzen wtyczki (Extensions) bedzie odizolowany od specyficznych nadpisan
 
 | Metric | Goal | How |
 |--------|------|-----|
-| Retencja miesieczna | >=80% po 30 dniach | Session logs |
-| Gotowosc do placenia | >=50% trial -> paid po 14 dniach | Subscriptions |
-| Conversations/user/day | >=3 | Session logs |
+| Active users | 20 max | Auth logs |
+| Conversations/user/day | ≥3 | Session logs |
 | Time-to-first-token | <2s | SSE latency |
 | Uptime | 99.5% | Health check |
-| LLM cost/user/month | <=EUR50 | Token counting |
+| LLM cost/user/month | ≤€5 | Token counting |
 
 ---
 

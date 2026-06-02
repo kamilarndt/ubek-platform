@@ -39,65 +39,75 @@
 
 ---
 
-## Iteration 1: History & Data-Driven Context (Priority)
+## Iteration 1: History & Memory (Priority)
 
-**Goal:** Full session persistence in PostgreSQL + data-driven context injection. AbortController for SSE.
+**Goal:** Session sidebar + Memory API integration. These unlock the most user value.
 
-### Task 1.1: Full Session Persistence (replaces ADR-002)
-
-| Field | Value |
-|-------|-------|
-| **Test** | TC-2.9 |
-| **Feature** | Session history persists in PostgreSQL per tenant_id. Server restart does NOT clear context. |
-| **Why** | ADR-002 withdrawn. Restarty serwera nie moga czyscic kontekstu uzytkownika. |
-| **Changes** | Remove in-memory SessionManager. All sessions go through `sessions` table in schema.sql. |
-| **Acceptance** | Send 10 msgs -> restart server -> load session -> all messages present |
-| **Effort** | 2h |
-
-### Task 1.2: Data-Driven Context Injection
-
-Instead of Memory API, inject parsed file content + web scrape text + images (Base64) directly into LLM context window via Router LLM. OCR and extraction delegated to external models (90% compute offloaded).
+### Task 1.1: Memory API Backend Integration
 
 | Field | Value |
 |-------|-------|
 | **Test** | TC-3.1 |
-| **Feature** | User uploads PDF/image -> backend sends parsed text/Base64 in prompt to Router LLM |
-| **Why** | Memory API is overkill for Phase 1. Context window of modern LLMs is sufficient for 20-user scale. |
-| **Changes** | `server/src/routes/chat.ts` — on file attachment, parse content and inject as `{role: "system", content: "File contents: ..."}` |
-| **Acceptance** | Upload PDF -> "Podsumuj" -> bot references content |
-| **Effort** | 1h |
+| **Feature** | Backend calls Memory API to store/retrieve user facts |
+| **Why** | Memory API v2 runs on :18765 (dedykowane dla UBEK, nie ArndtOs). Backend ignores it. |
+| **Changes** | `server/src/services/MemoryService.ts` (NEW) |
+| | `server/src/routes/chat.ts` — after each response, async-save facts |
+| | `server/src/index.ts` — remove "disabled" comment, wire it up |
+| **API** | `POST /api/memory/extract` → extract facts from text |
+| | `GET /api/memory/search?query=...` → find relevant facts |
+| **Acceptance** | TC-3.1 passes: user says fact → reload → bot remembers |
+| **Effort** | 2h |
 
-### Task 1.3: Sub-Agents as SQL Records
+### Task 1.2: Session History Sidebar (Frontend)
 
 | Field | Value |
 |-------|-------|
 | **Test** | TC-2.1 |
-| **Feature** | "Sub-agent" = separate session with dedicated system_prompt + context_text in DB |
-| **Why** | Zero infrastructure. Just SQL records with different prompts. |
-| **Changes** | `sessions` table: add `system_prompt`, `context_text`, `tool_mapping` columns. Backend reads these on session load. |
-| **Acceptance** | Create session with custom system_prompt -> bot uses that personality and context |
+| **Feature** | Sidebar with list of past conversations, click to load |
+| **Why** | Backend API exists (`GET /api/chat/sessions`). No frontend. |
+| **Changes** | `frontend/components/Sidebar.tsx` — session list UI |
+| | `frontend/lib/useChat.ts` — loadSessions() (exists but unused in sidebar) |
+| | `frontend/app/chat/page.tsx` — wire sidebar component |
+| **UI** | List of sessions (title, date). Click → load messages. "New Chat" button. |
+| **Acceptance** | TC-2.1 passes: send → reload → sidebar shows session → click → messages visible |
+| **Effort** | 3h |
+
+### Task 1.3: Simple Memory Panel (RODO)
+
+| Field | Value |
+|-------|-------|
+| **Test** | TC-3.8 |
+| **Feature** | User can view + delete stored facts |
+| **Why** | Required for RODO compliance |
+| **Changes** | `frontend/components/MemoryPanel.tsx` (NEW) |
+| | Route in settings or sidebar |
+| **UI** | List of facts with delete button per fact + "clear all" |
+| **Acceptance** | TC-3.8 passes: view → delete → bot no longer knows deleted fact |
+| **Effort** | 2h |
+
+---
+
+## Iteration 2: Chat Actions & Rendering
+
+### Task 2.1: Retry Button
+
+| Field | Value |
+|-------|-------|
+| **Test** | TC-2.2 |
+| **Feature** | "Spróbuj ponownie" button on bot responses |
+| **Changes** | `frontend/components/ChatMessage.tsx` — add retry button |
+| | `frontend/lib/useChat.ts` — retry() exists, wire to button |
+| **Acceptance** | TC-2.2 passes: retry 4x → each response different |
 | **Effort** | 1h |
 
-### Task 1.4: AbortController for SSE Streaming
+### Task 2.2: Copy Button
 
 | Field | Value |
 |-------|-------|
-| **Test** | — |
-| **Feature** | Client disconnect -> backend cancels LLM request via AbortController |
-| **Why** | Token cost optimization. No point streaming to a closed connection. |
-| **Changes** | `server/src/routes/chat.ts` — wrap fetch in AbortController, handle `req.on('close')` |
-| **Acceptance** | Start streaming -> close tab -> backend logs "request aborted" |
-| **Effort** | 30min |
-
-### Task 1.5: Session History Sidebar (Frontend)
-
-| Field | Value |
-|-------|-------|
-| **
-
-... [OUTPUT TRUNCATED - 2795 chars omitted out of 12795 total] ...
-
-passes: click → clipboard has content |
+| **Test** | TC-2.4 |
+| **Feature** | "Kopiuj" button on bot responses → clipboard |
+| **Changes** | `frontend/components/ChatMessage.tsx` — add copy button |
+| **Acceptance** | TC-2.4 passes: click → clipboard has content |
 | **Effort** | 30min |
 
 ### Task 2.3: Markdown + LaTeX Rendering
@@ -204,21 +214,7 @@ passes: click → clipboard has content |
 
 ---
 
-## Iteration 5+: Data-Driven Module Distribution (Phase 1) & Core-and-Extension (Phase 2)
-
-### Phase 1: Static Module Distribution
-- Admin modifies JSON config objects in DB
-- Parameter mapping per tenant_id
-- Module copy = duplicate record + change tenant_id
-- No automated marketplace code
-
-### Phase 2: Core-and-Extension Marketplace
-- Global extension core isolated from client overrides
-- Extension_Overrides table (JSON diff from core)
-- Dependency Injection / Hooks for auto-merge
-- Cost-free module replication between tenants
-
-## Iteration 6+: Agent Features
+## Iteration 5+: Agent Features
 
 | Task | Tests | Effort | Depends On |
 |------|-------|--------|------------|

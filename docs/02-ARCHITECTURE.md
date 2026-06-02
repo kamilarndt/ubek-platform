@@ -38,20 +38,6 @@
 
 ---
 
-## 1a. Facade Architecture (Data-Driven Configuration)
-
-Faza 1 stosuje **architektoniczna fasade** - kazdy tenant sprawia wrazenie posiadania pelnych funkcjonalnosci premium, podczas gdy pod maska realizacja jest maksymalnie uproszczona.
-
-| Obszar | Fasada (Phase 1) | Prawdziwa implementacja (Phase 2) |
-|--------|------------------|-----------------------------------|
-| Personalizacja | system_prompt + kontekst tekstowy per sesja (SQL) | Silnik regul + ML profilowanie |
-| "Sub-agenci" | Osobne watki SQL z dedykowanym promptem i plikami | Agentic Loop + A2A |
-| Bazy wiedzy | Wstrzykniecie tekstu/obrazow w okno kontekstowe Router LLM | pgvector + RAG pipeline |
-| OCR / ekstrakcja | Zrzucone na zewnetrzne modele LLM przez Router | Dedicated OCR service |
-| Dystrybucja modulow | Rekordy JSON w DB + mapowanie tenant_id | Core-and-Extension Marketplace |
-
-**Zasada:** W Fazie 1 wszystko co moze byc rekordem SQL + promptem - jest. Over-engineering jest wrogiem. Celem jest walidacja, nie skalowalnosc.
-
 ## 2. Stack
 
 | Layer | Technology | Version |
@@ -91,11 +77,45 @@ Faza 1 stosuje **architektoniczna fasade** - kazdy tenant sprawia wrazenie posia
 | Domyslny styl | Empatyczny, slodki jak BigTech | Neutralny, rzeczowy asystent - zero przymilnosci |
 | Per-user personality | Brak | Admin konfiguruje przez dashboard |
 
-**Default personality:** Nie jest slodki jak ChatGPT/Claude/Gemini. Jest rzeczowy, pomocny, konkretny. Zad
+**Default personality:** Nie jest slodki jak ChatGPT/Claude/Gemini. Jest rzeczowy, pomocny, konkretny. Zadnych Swietnie! Absolutnie! Z przyjemnoscia!. Ma pomagac rozwiazywac problemy, nie glaskac ego.
 
-... [OUTPUT TRUNCATED - 1348 chars omitted out of 11348 total] ...
+---
 
-nfiguracja (personality, extensiony)
+## 4. Component Architecture
+
+### 4.1 Frontend (`frontend/`)
+
+```
+app/ → (auth)/, chat/, vault/, agents/, admin/, document-generation/, vision/, extensions/{tenant}/
+
+lib/
+├── useChat.ts           # Chat hook: send, stream, sessions, retry
+├── ChatContext.tsx       # Chat state provider
+├── api-client.ts        # Fetch wrapper with JWT
+├── api.ts               # API functions (KB, documents, vault)
+├── component-registry.ts # Lazy-loaded tool registry
+└── extension-loader.ts  # Per-tenant extension loading
+
+e2e/                     # Playwright tests
+├── stage1-mvp.spec.ts   # Tests TC-1.x
+├── stage2-usable.spec.ts# Tests TC-2.x
+└── stage3-advanced.spec.ts # Tests TC-3.x
+```
+
+**SSE Schema (CONSISTENT — do NOT break without frontend update):**
+```
+{ type: "status", status }       → Status updates
+{ type: "text", content }        → Token-by-token text deltas
+{ type: "done", sessionId }      → Stream complete
+```
+
+### 4.2 Admin Dashboard
+
+Panel administratora /admin. Pozwala na pelna kontrole nad agentami, wdrazanie extensionow, monitorowanie bledow.
+
++-- agents/       -> lista agentow, podglad sesji, promptow, odpowiedzi
++-- extensions/   -> builder (tworzenie .ts), sandbox test, deploy na tenanta
++-- users/        -> per-user konfiguracja (personality, extensiony)
 +-- requests/     -> zgloszenia od uzytkownikow o nowe funkcje
 +-- settings/     -> core ustawienia platformy, domyslny system prompt
 
@@ -105,18 +125,6 @@ nfiguracja (personality, extensiony)
 3. Admin testuje w sandboxie (izolacja, mock usera)
 4. Admin deployuje na konkretnego tenanta
 5. U usera pojawia sie nowa zakladka/sidebar
-
-### 4.3 Data-Driven Sub-Agents
-
-Sub-agenci oraz dedykowane nowe rozmowy oparte na konkretnych plikach sa realizowane wylacznie na poziomie danych - jako rekordy w PostgreSQL. Kazda sesja moze miec:
-- Wlasny system_prompt (override globalnego)
-- Przypisany kontekst tekstowy (sparsowany plik, web scraping, obrazy Base64)
-- Osobny zestaw tool_mapping (ktore narzedzia sa dostepne)
-
-Schemat:
-
-
-To pozwala na tworzenie sub-agentow bez zadnej infrastruktury - to tylko rekordy w DB z roznymi promptami.
 
 ### 4.3 Backend (`server/src/`)
 
@@ -135,31 +143,6 @@ Separate Python FastAPI on port 18765 (dedykowane dla UBEK, nie ArndtOs). Postgr
 
 **Status:** Active but NOT integrated with backend (comment: "disabled — handled by Pi Agent"). Fix: integrate before building memory features.
 
-
-### 4.5 SSE Streaming z AbortController
-
-Kazde strumieniowanie SSE musi wspierac przerwanie generowania (AbortController) po stronie backendu. Gdy klient zamyka polaczenie lub wysyla sygnal abort, backend:
-1. Przerywa zapytanie do Router LLM
-2. Zapisuje dotychczasowy output jako czesciowa odpowiedz
-3. Oznacza sesje jako status: interrupted
-4. Nie nalicza pelnych kosztow tokenow (oszczednosc)
-
-Implementacja:
-
-
-### 4.6 Module Distribution: Phase 1 vs Phase 2
-
-**Phase 1 (do 20 uzytkownikow) - Dystrybucja statyczna:**
-- Administrator modyfikuje obiekty konfiguracyjne JSON w bazie danych
-- Mapowanie parametrow per tenant_id
-- Serializacja modulu = skopiowanie rekordu + podminana tenant_id
-- Brak automatycznego marketplace w kodzie
-
-**Phase 2 (Core-and-Extension Marketplace):**
-- Globalny rdzen wtyczki (Extensions) odizolowany od nadpisan klienta
-- Extension_Overrides w bazie danych (JSON diff od core)
-- Dependency Injection / Hooks dla automatycznego mergu
-- Bezkosztowe replikowanie modulow miedzy tenantami
 ---
 
 ## 5. Security
@@ -206,25 +189,13 @@ Vault zones (future — add `zone` column):
 | ID | Decision | Status |
 |----|----------|--------|
 | ADR-001 | No default tools in server — `tools: []` | ✅ Adopted |
+| ADR-002 | In-memory sessions only | ✅ Adopted |
 | ADR-003 | SDK adapter with explicit SSE schema | ✅ Adopted |
 | ADR-004 | Per-tenant AgentSession isolation | ✅ Adopted |
 | ADR-005 | Disabled auto-retry in chat | ✅ Adopted |
 | ADR-006 | Feature flags for phased rollout | 📋 Proposed |
-| ADR-002 | In-memory sessions only | ❌ **WITHDRAWN** |
-| ADR-003 | SDK adapter with explicit SSE schema | ✅ Adopted |
-| ADR-004 | Per-tenant AgentSession isolation | ✅ Adopted |
-| ADR-005 | Disabled auto-retry in chat | ✅ Adopted |
-| ADR-006 | Feature flags for phased rollout | 📋 Proposed |
-| ADR-007 | Default Tools for Every Pi Agent | ✅ Adopted |
-| ADR-008 | Admin Dashboard - kontrola agentow, builder, deploy | 📋 Proposed |
-| ADR-009 | Per-User Personality - admin-config, neutral default | 📋 Proposed |
-| ADR-010 | Per-User Dynamic UI - sidebar/tabs z extensionow | 📋 Proposed |
-| ADR-011 | Data-Driven Facade Architecture (Phase 1) | ✅ Adopted |
-| ADR-012 | Full Session Persistence (replaces ADR-002) | ✅ Adopted |
-| — | SSE over WebSocket | ✅ Active |
-| — | Router LLM jedyny provider | ✅ Enforced |
-| — | PiAgentService przez SDK (future) | 📋 Accepted |
-| — | Core-and-Extension Marketplace (Phase 2) | 📋 Proposed | Admin Dashboard - kontrola agentow, builder, deploy | Proposed |
+| — | SSE over WebSocket
+| ADR-008 | Admin Dashboard - kontrola agentow, builder, deploy | Proposed |
 | ADR-009 | Per-User Personality - admin-config, neutral default | Proposed |
 | ADR-010 | Per-User Dynamic UI - sidebar/tabs z extensionow | Proposed | | ✅ Active |
 | — | Router LLM jedyny provider | ✅ Enforced |
