@@ -1,7 +1,7 @@
 # ADR-002: In-Memory Sessions Only (No Persistence Initially)
 
 ## Status
-Proposed
+**WITHDRAWN** (2026-06-02) — replaced by ADR-012: Full Session Persistence
 
 ## Context
 
@@ -143,3 +143,11 @@ We will revisit persistence when at least one of the following is true:
 Simplicity and security over persistence. We explicitly choose _not_ to add a capability (session persistence) that has no product requirement, rather than inheriting a default (JSONL files) that creates security and operational debt.
 
 The cost is a future migration when persistence requirements emerge — but that migration will be informed by real requirements rather than speculative design.
+
+---
+
+## Withdrawal Note (2026-06-02)
+
+This ADR is withdrawn. Phase 1 requires FULL persistence of session state in PostgreSQL (`sessions` table per tenant_id). Server restarts must NOT clear conversation context. Replaced by ADR-012.
+
+**Reason:** In-memory sessions break the facade requirement that every tenant appears to have full premium functionality. A chatbot that forgets everything on restart is not acceptable for first client.

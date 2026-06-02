@@ -9,11 +9,11 @@
 
 ## Overview
 
-UBEK is a platform that sells AI intelligence to small businesses as a service. Each user gets their own personal Pi Agent that grows with them — the user requests features through conversation, the admin builds them as extensions in the Admin Dashboard.
+UBEK is a platform that sells AI intelligence to small businesses as a service. Each user gets their own personal Pi Agent that grows with them — the user requests features through conversation, the admin configures them through data-driven facade.
 
-**Architecture Principle:** Backend NEVER calls LLM models directly. Everything goes through Router LLM (:18881).
+**Architecture Principle:** Backend NEVER calls LLM models directly. Everything goes through Router LLM (:18881). Phase 1 uses **architectural facade** (Data-Driven Configuration) to minimize time-to-market.
 
-**Target:** 1-20 users in Phase 1, single VPS, max €50/month LLM cost.
+**Target:** 1-20 users in Phase 1, single VPS, max €50/month LLM cost. Success = retention + willingness to pay.
 
 ---
 
@@ -118,45 +118,39 @@ UBEK is a platform that sells AI intelligence to small businesses as a service. 
 
 ---
 
-## STAGE 3 — Good Chatbot (Memory + RAG)
+## STAGE 3 — Good Chatbot (Context Injection)
 
-**Goal:** The agent remembers facts across sessions and can search user documents.
+**Goal:** The agent appears to remember facts across sessions and search user documents — implemented through context injection into LLM window, not separate infrastructure.
 
 ### Features
-- Long-term memory (facts persist between sessions)
-- RAG — upload documents, query them
+- File parsing + context injection (PDF, images, web scrapes directly into prompt)
+- Sub-agents as SQL records (separate sessions with custom system_prompt + context_text)
 - Source citations in responses
-- Multiple Knowledge Bases
 - Document generation (PDF/MD/DOCX)
-- Privacy panel (view + delete facts)
+- AbortController for SSE (token cost optimization)
 
 ### Implementation Tasks
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.1 | Memory API integration | server/src/routes/chat.ts, MemoryService.ts | 2h |
-| 3.2 | Memory Service (extract + search) | Done (MemoryService.ts) | ✅ |
-| 3.3 | Knowledge Base API | Done (KB CRUD in useChat.ts) | ✅ |
-| 3.4 | Knowledge Base UI | frontend/components/KBPanel.tsx | 4h |
-| 3.5 | Source citations rendering | CentralChat.tsx (processing exists) | 2h |
-| 3.6 | Multi-document RAG | Done (API supports) | ⚠️ Verify |
-| 3.7 | Document generation | Done (generateDocument in useChat.ts) | ⚠️ Verify UI |
-| 3.8 | Privacy panel | frontend/components/MemoryPanel.tsx | 2h |
-| 3.9 | "Skąd to wiesz?" citation link | frontend/components/CitationPopover.tsx | 2h |
+| 3.1 | Data-driven context injection | server/src/routes/chat.ts — inject parsed file content as system messages | 1h |
+| 3.2 | Sub-agents via SQL records | sessions table: add system_prompt, context_text, tool_mapping columns | 1h |
+| 3.3 | AbortController for SSE | server/src/routes/chat.ts — wrap fetch with abort signal | 30min |
+| 3.4 | Full session persistence (ADR-002 withdrawn) | Remove in-memory SessionManager, use DB exclusively | 2h |
+| 3.5 | Source citations rendering | CentralChat.tsx — cite source documents in responses | 2h |
+| 3.6 | Document generation | Done (generateDocument in useChat.ts) | ⚠️ Verify UI |
+| 3.7 | Knowledge Base UI | frontend/components/KBPanel.tsx | 4h |
 
 ### Acceptance Test Checklist (STAGE 3)
-
 | ID | Test | Steps | Expected | Status |
 |----|------|-------|----------|--------|
-| TC-3.1 | Long-term memory | "Mam na imię Kamil" → reload → "Jak mam na imię?" | "Kamil" | ❌ |
-| TC-3.2 | RAG upload + query | Upload doc → ask about it | Info from document | ❌ |
+| TC-3.1 | Context injection | Upload PDF → "Podsumuj" → reload → "Co było w dokumencie?" | Bot references file content | ❌ |
+| TC-3.2 | Sub-agent personality | Create session with custom system_prompt → ask "Kim jesteś?" | Bot uses custom persona | ❌ |
 | TC-3.3 | Source citations | Upload doc → query → check [Źródło N] | Source refs present | ❌ |
-| TC-3.4 | Multi-document RAG | Upload 2 docs → cross-doc question | Combines both | ❌ |
-| TC-3.5 | RAG no hallucination | Ask about data not in KB | "Brak informacji" | ❌ |
+| TC-3.4 | Session persistence | Send 10 msgs → restart server → load session | All messages present | ❌ |
+| TC-3.5 | AbortController | Start streaming → close tab → backend logs "aborted" | Token cost saved | ❌ |
 | TC-3.6 | Document export | Send → export → download | .md/.pdf file | ❌ |
-| TC-3.7 | "Skąd to wiesz?" | Query KB → ask source | Points to document | ❌ |
-| TC-3.8 | Privacy panel | View facts → delete → ask bot | Fact removed | ❌ |
 
-**Stage 3 PASS CRITERIA:** TC-3.1 + TC-3.2 + TC-3.8 pass (core), others optional for Phase 1
+**Stage 3 PASS CRITERIA:** TC-3.1 + TC-3.4 pass (core facade), others optional for Phase 1
 
 ---
 
@@ -229,7 +223,7 @@ UBEK is a platform that sells AI intelligence to small businesses as a service. 
 |-------|-------------|------------------|----------|
 | **1** MVP | ✅ Done | Working chat with context | **Now** |
 | **2** Useful | 4h remaining | History UI, empty state, context reload | **Before client** |
-| **3** Good | 10h | Memory + RAG integration | **After client feedback** |
+| **3** Facade | 5h | Context injection, full persistence, AbortController, sub-agents SQL | **Before client** |
 | **4** Admin | 21d | Admin Dashboard, extensions, personality | **After validation** |
 | **5** Advanced | 16d | Vault zones, function calling, agentic loop | **Phase 2** |
 
@@ -237,13 +231,17 @@ UBEK is a platform that sells AI intelligence to small businesses as a service. 
 
 ```
 Week 1:
-├── Verify Memory API integration (2h)
+├── Full session persistence (DB, not memory) (2h)
+├── Context injection for files (1h)
+├── Sub-agents as SQL records (1h)
+├── AbortController for SSE (30min)
 ├── History UI — get template working (3h)
 ├── Empty state + context reload fix (1h)
-└── Test all TC-2.x (2h)
+└── Test all TC-2.x + TC-3.1, TC-3.4 (2h)
 
 Week 2:
 ├── Admin Dashboard — basic overview (2d)
+├── Module distribution JSON config (1d)
 ├── Extension Request Queue (1d)
 ├── Dynamic Sidebar (2d)
 └── First client onboarding
